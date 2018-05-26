@@ -20,14 +20,20 @@ public class Main extends AppCompatActivity {
 
         Context context = getBaseContext();
 
-        /*if(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
-                == PackageManager.PERMISSION_DENIED) {
-            ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.CAMERA}, requestCode);
-        }*/
         Intent i = new Intent(context, MyService.class);
         i.putExtra("KEY1", "Value to be used by the service");
         i.setAction(Constants.ACTION.START_SERVICE);
         context.startService(i);
 
+    }
+
+    @Override
+    protected void onDestroy(){
+        Context context = getBaseContext();
+
+        Intent i = new Intent(context, MyService.class);
+        i.setAction(Constants.ACTION.STOP_SERVICE);
+        context.startService(i);
+        super.onDestroy();
     }
 }

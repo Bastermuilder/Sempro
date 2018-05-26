@@ -4,12 +4,22 @@ import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.nfc.Tag;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.IBinder;
+import android.os.Looper;
+import android.os.Message;
+import android.util.Log;
 import android.widget.Toast;
 
 public class MyService extends Service {
 
     private VideoRecorder recorder;
+    private HandlerThread thread;
+    private Handler handler;
+
+    private static final String TAG = "MyService";
 
 
     @Override
@@ -23,6 +33,7 @@ public class MyService extends Service {
                 start_recording();
                 break;
             case Constants.ACTION.STOP_RECORD :
+                Log.d(TAG, "Got stop Intent");
                 stop_recording();
                 break;
             case Constants.ACTION.STOP_SERVICE :
@@ -80,13 +91,32 @@ public class MyService extends Service {
 
     private void start_recording(){
         //TODO: Funktion für Aufnahme der OBD-Daten einfügen und in eigenem Thread laufen lassen
-        recorder.startRecordingVideo();
+
+        thread = new HandlerThread("cutter") {
+            public void run() {
+                Looper.prepare();
+                while(!Thread.currentThread().isInterrupted()){
+                    try {
+                        sleep(5000);
+                        recorder.startRecordingVideo();
+                        recorder.stopRecordingVideo();
+                    } catch (InterruptedException e) {
+                        quitSafely();
+                    }
+                }
+            }
+        };
+        thread.start();
+
         Toast.makeText(this, "Started", Toast.LENGTH_SHORT).show();
     }
 
     private void stop_recording() {
         //TODO: Aufnahme OBD stoppen
-        recorder.stopRecordingVideo();
+        Log.d(TAG, "Stopping Thread");
+        thread.interrupt();
+        thread.quitSafely();
+
         Toast.makeText(this, "Stopped", Toast.LENGTH_SHORT).show();
     }
 }

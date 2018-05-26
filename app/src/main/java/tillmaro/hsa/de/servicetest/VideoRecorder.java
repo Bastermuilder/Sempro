@@ -373,40 +373,14 @@ public class VideoRecorder {
         try {
             openCamera(300, 300);
             setUpMediaRecorder();
-            mPreviewBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
-            List<Surface> surfaces = new ArrayList<>();
-
-
-            // Set up Surface for the MediaRecorder
-            Surface recorderSurface = mMediaRecorder.getSurface();
-            surfaces.add(recorderSurface);
-            mPreviewBuilder.addTarget(recorderSurface);
-
-            // Start a capture session
-            // Once the session starts, we can update the UI and start recording
-            mCameraDevice.createCaptureSession(surfaces, new CameraCaptureSession.StateCallback() {
-
-                @Override
-                public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
-                    mPreviewSession = cameraCaptureSession;
-                    updatePreview();
-                    //TODO: Recorder in eigenem Thread laufen lassen
-                    // UI
-                    mIsRecordingVideo = true;
-
-                    // Start recording
-                    mMediaRecorder.start();
-
-                }
-
-                @Override
-                public void onConfigureFailed(@NonNull CameraCaptureSession cameraCaptureSession) {
-                    Toast.makeText(service, "Failed", Toast.LENGTH_SHORT).show();
-                }
-            }, mBackgroundHandler);
-        } catch (CameraAccessException | IOException e) {
+            startMediaRecorder();
+            Log.d(TAG, "started truly");
+        } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    public void startRecordingLoop(){
 
     }
 
@@ -424,14 +398,72 @@ public class VideoRecorder {
         mMediaRecorder.stop();
         mMediaRecorder.reset();
 
+        stopBackgroundThread();
+
 
         Toast.makeText(service, "Video saved: " + mNextVideoAbsolutePath,
                 Toast.LENGTH_SHORT).show();
         Log.d(TAG, "Video saved: " + mNextVideoAbsolutePath);
 
         mNextVideoAbsolutePath = null;
-        //startPreview();
+        closeCamera();
     }
+
+    public void makeCut(){
+        mIsRecordingVideo = false;
+        mMediaRecorder.stop();
+        startBackgroundThread();
+        startMediaRecorder();
+
+        Log.d(TAG, "Successful cut");
+        Toast.makeText(service, "Cut!", Toast.LENGTH_SHORT).show();
+    }
+
+    private void startMediaRecorder(){
+        try {
+            mPreviewBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
+            List<Surface> surfaces = new ArrayList<>();
+
+
+            // Set up Surface for the MediaRecorder
+            Surface recorderSurface = mMediaRecorder.getSurface();
+            surfaces.add(recorderSurface);
+            mPreviewBuilder.addTarget(recorderSurface);
+
+            Log.d(TAG, "creating Capture Session");
+
+            startBackgroundThread();
+
+            // Start a capture session
+            // Once the session starts, we can update the UI and start recording
+            mCameraDevice.createCaptureSession(surfaces, new CameraCaptureSession.StateCallback() {
+
+                @Override
+                public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
+                    Log.d(TAG, "Configuring Capture Session");
+                    mPreviewSession = cameraCaptureSession;
+                    updatePreview();
+                    //TODO: Recorder in eigenem Thread laufen lassen
+                    // UI
+                    mIsRecordingVideo = true;
+
+                    // Start recording
+                    mMediaRecorder.start();
+                    Log.d(TAG, "started Recorder");
+
+                }
+
+                @Override
+                public void onConfigureFailed(@NonNull CameraCaptureSession cameraCaptureSession) {
+                    Log.d(TAG, "Configure Failed");
+                    Toast.makeText(service, "Failed", Toast.LENGTH_SHORT).show();
+                }
+            }, mBackgroundHandler);
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+    }
+
 
     /**
      * Compares two {@code Size}s based on their areas.
