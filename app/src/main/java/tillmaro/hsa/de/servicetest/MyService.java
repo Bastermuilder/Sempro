@@ -5,6 +5,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.nfc.Tag;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
@@ -13,11 +14,24 @@ import android.os.Message;
 import android.util.Log;
 import android.widget.Toast;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+
+import processing.ffmpeg.videokit.AsyncCommandExecutor;
+import processing.ffmpeg.videokit.Command;
+import processing.ffmpeg.videokit.LogLevel;
+import processing.ffmpeg.videokit.VideoKit;
+import processing.ffmpeg.videokit.VideoProcessingResult;
+
 public class MyService extends Service {
 
     private VideoRecorder recorder;
     private HandlerThread thread;
-    private Handler handler;
+    private int loop_count = 0;
 
     private static final String TAG = "MyService";
 
@@ -97,11 +111,13 @@ public class MyService extends Service {
                 Looper.prepare();
                 while(!Thread.currentThread().isInterrupted()){
                     try {
+                        recorder.startRecordingVideo(getVideoFilePath(Integer.toString(loop_count % 3)));
                         sleep(5000);
-                        recorder.startRecordingVideo();
                         recorder.stopRecordingVideo();
+                        loop_count += 1;
                     } catch (InterruptedException e) {
-                        quitSafely();
+                        Log.d(TAG, "Stopping thread");
+                        quit();
                     }
                 }
             }
@@ -113,10 +129,101 @@ public class MyService extends Service {
 
     private void stop_recording() {
         //TODO: Aufnahme OBD stoppen
-        Log.d(TAG, "Stopping Thread");
         thread.interrupt();
-        thread.quitSafely();
+
+        final File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES);
+        String mpath = dir.getAbsolutePath() + "/";
+
+        switch (loop_count){
+            case 0:
+                if(loop_count == 0)
+                    break;
+                concatenate(mpath + "0.mp4", mpath + "1.mp4", mpath + "final.mp4");
+                break;
+            case 1:
+                concatenate(mpath + "1.mp4", mpath + "0.mp4", mpath + "final.mp4");
+                break;
+            case 2:
+                concatenate(mpath + "2.mp4", mpath + "1.mp4", mpath + "final.mp4");
+                break;
+        }
 
         Toast.makeText(this, "Stopped", Toast.LENGTH_SHORT).show();
+    }
+
+    private String getVideoFilePath(String number) {
+        final File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES);
+        return (dir == null ? "" : (dir.getAbsolutePath() + "/"))
+                + number + ".mp4";
+    }
+
+    /**
+     * Concatenates two videos
+     * @param inputFile1 First video file path
+     * @param inputFile2 Second video file path
+     * @param outputFile Output file path
+     */
+    public static void concatenate(String inputFile1, String inputFile2, String outputFile) {
+        Log.d(TAG, "Concatenating " + inputFile1 + " and " + inputFile2 + " to " + outputFile);
+        String list = generateList(new String[] {inputFile1, inputFile2});
+
+        //TODO: Command richtig hinbekommen
+        VideoKit vk = new VideoKit();
+        vk.setLogLevel(LogLevel.FULL);
+        //Command command = vk.createCommand().customCommand("ffmpeg -f concat -i" + list + "-c copy" + outputFile).build();
+        Command command = vk.createCommand()
+                .overwriteOutput()
+                .inputPath(inputFile1)
+                .inputPath(inputFile2)
+                .outputPath(outputFile)
+                .customCommand("-f concat -c copy")
+                .copyVideoCodec()
+                .experimentalFlag()
+                .build();
+
+        command.execute();
+
+        Log.d(TAG, "Done building");
+        /*vk.run(new String[] {
+                "ffmpeg",
+                "-f",
+                "concat",
+                "-i",
+                list,
+                "-c",
+                "copy",
+                outputFile
+        });*/
+    }
+
+    /**
+     * Generate an ffmpeg file list
+     * @param inputs Input files for ffmpeg
+     * @return File path
+     */
+    private static String generateList(String[] inputs) {
+        File list;
+        Writer writer = null;
+        try {
+            list = File.createTempFile("ffmpeg-list", ".txt");
+            writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(list)));
+            for (String input: inputs) {
+                writer.write("file '" + input + "'\n");
+                Log.d(TAG, "Writing to list file: file '" + input + "'");
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "/";
+        } finally {
+            try {
+                if (writer != null)
+                    writer.close();
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }
+
+        Log.d(TAG, "Wrote list file to " + list.getAbsolutePath());
+        return list.getAbsolutePath();
     }
 }

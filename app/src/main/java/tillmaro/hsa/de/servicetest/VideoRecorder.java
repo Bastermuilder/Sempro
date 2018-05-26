@@ -343,7 +343,7 @@ public class VideoRecorder {
         mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
         mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
         if (mNextVideoAbsolutePath == null || mNextVideoAbsolutePath.isEmpty()) {
-            mNextVideoAbsolutePath = getVideoFilePath(service);
+            mNextVideoAbsolutePath = getVideoFilePath();
         }
         mMediaRecorder.setOutputFile(mNextVideoAbsolutePath);
         mMediaRecorder.setVideoEncodingBitRate(10000000);
@@ -363,18 +363,18 @@ public class VideoRecorder {
         mMediaRecorder.prepare();
     }
 
-    private String getVideoFilePath(Context context) {
+    private String getVideoFilePath() {
         final File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES);
         return (dir == null ? "" : (dir.getAbsolutePath() + "/"))
                 + System.currentTimeMillis() + ".mp4";
     }
 
-    public void startRecordingVideo() {
+    public void startRecordingVideo(String videopath) {
         try {
+            mNextVideoAbsolutePath = videopath;
             openCamera(300, 300);
             setUpMediaRecorder();
             startMediaRecorder();
-            Log.d(TAG, "started truly");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -430,7 +430,6 @@ public class VideoRecorder {
             surfaces.add(recorderSurface);
             mPreviewBuilder.addTarget(recorderSurface);
 
-            Log.d(TAG, "creating Capture Session");
 
             startBackgroundThread();
 
