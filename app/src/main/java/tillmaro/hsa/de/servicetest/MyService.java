@@ -14,6 +14,12 @@ import android.os.Message;
 import android.util.Log;
 import android.widget.Toast;
 
+import com.github.hiteshsondhi88.libffmpeg.ExecuteBinaryResponseHandler;
+import com.github.hiteshsondhi88.libffmpeg.FFmpeg;
+import com.github.hiteshsondhi88.libffmpeg.LoadBinaryResponseHandler;
+import com.github.hiteshsondhi88.libffmpeg.exceptions.FFmpegCommandAlreadyRunningException;
+import com.github.hiteshsondhi88.libffmpeg.exceptions.FFmpegNotSupportedException;
+
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -116,8 +122,10 @@ public class MyService extends Service {
                         recorder.stopRecordingVideo();
                         loop_count += 1;
                     } catch (InterruptedException e) {
+                        if (recorder.isRecordingVideo())
+                            recorder.stopRecordingVideo();
                         Log.d(TAG, "Stopping thread");
-                        quit();
+                        thread.quit();
                     }
                 }
             }
@@ -134,17 +142,19 @@ public class MyService extends Service {
         final File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES);
         String mpath = dir.getAbsolutePath() + "/";
 
-        switch (loop_count){
+        Log.d(TAG, "Loopcount: " + loop_count);
+
+        switch ((loop_count - 1)%3){
             case 0:
                 if(loop_count == 0)
                     break;
-                concatenate(mpath + "0.mp4", mpath + "1.mp4", mpath + "final.mp4");
+                concatenateWM(mpath + "1.mp4", mpath + "0.mp4", mpath + "final.mp4");
                 break;
             case 1:
-                concatenate(mpath + "1.mp4", mpath + "0.mp4", mpath + "final.mp4");
+                concatenateWM(mpath + "0.mp4", mpath + "1.mp4", mpath + "final.mp4");
                 break;
             case 2:
-                concatenate(mpath + "2.mp4", mpath + "1.mp4", mpath + "final.mp4");
+                concatenateWM(mpath + "1.mp4", mpath + "2.mp4", mpath + "final.mp4");
                 break;
         }
 
@@ -157,43 +167,77 @@ public class MyService extends Service {
                 + number + ".mp4";
     }
 
-    /**
-     * Concatenates two videos
-     * @param inputFile1 First video file path
-     * @param inputFile2 Second video file path
-     * @param outputFile Output file path
-     */
-    public static void concatenate(String inputFile1, String inputFile2, String outputFile) {
+    private void concatenateWM(String inputFile1, String inputFile2, String outputFile) {
         Log.d(TAG, "Concatenating " + inputFile1 + " and " + inputFile2 + " to " + outputFile);
         String list = generateList(new String[] {inputFile1, inputFile2});
 
-        //TODO: Command richtig hinbekommen
-        VideoKit vk = new VideoKit();
-        vk.setLogLevel(LogLevel.FULL);
-        //Command command = vk.createCommand().customCommand("ffmpeg -f concat -i" + list + "-c copy" + outputFile).build();
-        Command command = vk.createCommand()
-                .overwriteOutput()
-                .inputPath(inputFile1)
-                .inputPath(inputFile2)
-                .outputPath(outputFile)
-                .customCommand("-f concat -c copy")
-                .copyVideoCodec()
-                .experimentalFlag()
-                .build();
+        FFmpeg ffmpeg = FFmpeg.getInstance(this);
+        try {
+            ffmpeg.loadBinary(new LoadBinaryResponseHandler() {
 
-        command.execute();
+                @Override
+                public void onStart() {}
+
+                @Override
+                public void onFailure() {}
+
+                @Override
+                public void onSuccess() {}
+
+                @Override
+                public void onFinish() {}
+            });
+        } catch (FFmpegNotSupportedException e) {
+            // Handle if FFmpeg is not supported by device
+            Log.d(TAG, "FFmpeg not supported");
+        }
+
+        try {
+            // to execute "ffmpeg -version" command you just need to pass "-version"
+            ffmpeg.execute(new String[] {
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-y",
+                    "-i",
+                    list,
+                    "-c",
+                    "copy",
+                    outputFile
+            }, new ExecuteBinaryResponseHandler() {
+
+                @Override
+                public void onStart() {
+                    Log.d(TAG, "Started Concatenating");
+                }
+
+                @Override
+                public void onProgress(String message) {
+                    Log.d(TAG, "Progress: " + message);
+                }
+
+                @Override
+                public void onFailure(String message) {
+                    Log.d(TAG, "Failure: " + message);
+                }
+
+                @Override
+                public void onSuccess(String message) {
+                    Log.d(TAG, "Success: " + message);
+                }
+
+                @Override
+                public void onFinish() {
+                    Log.d(TAG, "Finished concatenating");
+                }
+            });
+        } catch (FFmpegCommandAlreadyRunningException e) {
+            Log.d(TAG, "FFmpeg already running");
+            // Handle if FFmpeg is already running
+        }
 
         Log.d(TAG, "Done building");
-        /*vk.run(new String[] {
-                "ffmpeg",
-                "-f",
-                "concat",
-                "-i",
-                list,
-                "-c",
-                "copy",
-                outputFile
-        });*/
     }
 
     /**
@@ -201,7 +245,7 @@ public class MyService extends Service {
      * @param inputs Input files for ffmpeg
      * @return File path
      */
-    private static String generateList(String[] inputs) {
+    private String generateList(String[] inputs) {
         File list;
         Writer writer = null;
         try {
@@ -226,4 +270,5 @@ public class MyService extends Service {
         Log.d(TAG, "Wrote list file to " + list.getAbsolutePath());
         return list.getAbsolutePath();
     }
+
 }

@@ -158,6 +158,9 @@ public class VideoRecorder {
         this.service = service;
     }
 
+    public boolean isRecordingVideo(){
+        return mIsRecordingVideo;
+    }
     /**
      * In this sample, we choose a video size with 3x4 aspect ratio. Also, we don't use sizes
      * larger than 1080p, since MediaRecorder cannot handle such a high-resolution video.
@@ -309,15 +312,9 @@ public class VideoRecorder {
         }
     }
 
-    /**
-     * Start the camera preview.
-     */
-    private void startPreview() {
-
-    }
 
     /**
-     * Update the camera preview. {@link #startPreview()} needs to be called in advance.
+     * For some reason you need to call this. Don't delete
      */
     private void updatePreview() {
         if (null == mCameraDevice) {
@@ -375,14 +372,12 @@ public class VideoRecorder {
             openCamera(300, 300);
             setUpMediaRecorder();
             startMediaRecorder();
+            mIsRecordingVideo = true;
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    public void startRecordingLoop(){
-
-    }
 
     private void closePreviewSession() {
         if (mPreviewSession != null) {
@@ -407,16 +402,6 @@ public class VideoRecorder {
 
         mNextVideoAbsolutePath = null;
         closeCamera();
-    }
-
-    public void makeCut(){
-        mIsRecordingVideo = false;
-        mMediaRecorder.stop();
-        startBackgroundThread();
-        startMediaRecorder();
-
-        Log.d(TAG, "Successful cut");
-        Toast.makeText(service, "Cut!", Toast.LENGTH_SHORT).show();
     }
 
     private void startMediaRecorder(){
@@ -474,34 +459,6 @@ public class VideoRecorder {
             // We cast here to ensure the multiplications won't overflow
             return Long.signum((long) lhs.getWidth() * lhs.getHeight() -
                     (long) rhs.getWidth() * rhs.getHeight());
-        }
-
-    }
-
-    public static class ErrorDialog extends DialogFragment {
-
-        private static final String ARG_MESSAGE = "message";
-
-        public static ErrorDialog newInstance(String message) {
-            ErrorDialog dialog = new ErrorDialog();
-            Bundle args = new Bundle();
-            args.putString(ARG_MESSAGE, message);
-            dialog.setArguments(args);
-            return dialog;
-        }
-
-        @Override
-        public Dialog onCreateDialog(Bundle savedInstanceState) {
-            final Activity activity = getActivity();
-            return new AlertDialog.Builder(activity)
-                    .setMessage(getArguments().getString(ARG_MESSAGE))
-                    .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialogInterface, int i) {
-                            activity.finish();
-                        }
-                    })
-                    .create();
         }
 
     }
