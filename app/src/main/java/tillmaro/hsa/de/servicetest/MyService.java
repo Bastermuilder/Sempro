@@ -27,11 +27,6 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 
-import processing.ffmpeg.videokit.AsyncCommandExecutor;
-import processing.ffmpeg.videokit.Command;
-import processing.ffmpeg.videokit.LogLevel;
-import processing.ffmpeg.videokit.VideoKit;
-import processing.ffmpeg.videokit.VideoProcessingResult;
 
 public class MyService extends Service {
 
@@ -115,11 +110,11 @@ public class MyService extends Service {
         thread = new HandlerThread("cutter") {
             public void run() {
                 Looper.prepare();
+                recorder.startRecordingVideo(getVideoFilePath(Integer.toString(loop_count % 3)));
                 while(!Thread.currentThread().isInterrupted()){
                     try {
-                        recorder.startRecordingVideo(getVideoFilePath(Integer.toString(loop_count % 3)));
                         sleep(5000);
-                        recorder.stopRecordingVideo();
+                        recorder.makeCut(getVideoFilePath(Integer.toString(loop_count % 3)));
                         loop_count += 1;
                     } catch (InterruptedException e) {
                         if (recorder.isRecordingVideo())

@@ -427,8 +427,6 @@ public class VideoRecorder {
                     Log.d(TAG, "Configuring Capture Session");
                     mPreviewSession = cameraCaptureSession;
                     updatePreview();
-                    //TODO: Recorder in eigenem Thread laufen lassen
-                    // UI
                     mIsRecordingVideo = true;
 
                     // Start recording
@@ -460,7 +458,27 @@ public class VideoRecorder {
             return Long.signum((long) lhs.getWidth() * lhs.getHeight() -
                     (long) rhs.getWidth() * rhs.getHeight());
         }
+    }
 
+    public void makeCut(String videopath){
+        Log.d(TAG, "Making cut, saving to " + videopath);
+        Long starttime = System.currentTimeMillis();
+        mNextVideoAbsolutePath = videopath;
+
+        //Stop the Video and save it
+        mMediaRecorder.stop();
+        //mMediaRecorder.reset();
+        Log.d(TAG, "Stop time: " + (System.currentTimeMillis() - starttime));
+
+        //Prepare Recorder and start record
+        try {
+            setUpMediaRecorder();
+            Log.d(TAG, "Setup time: " + (System.currentTimeMillis() - starttime));
+            startMediaRecorder();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        Log.d(TAG, "Finish time: " + (System.currentTimeMillis() - starttime));
     }
 
 }
