@@ -170,7 +170,7 @@ public class VideoRecorder {
      */
     private static Size chooseVideoSize(Size[] choices) {
         for (Size size : choices) {
-            if (size.getWidth() == size.getHeight() * 4 / 3 && size.getWidth() <= 1080) {
+            if (size.getWidth() == size.getHeight() * 16 / 9 && size.getWidth() <= 1920) {
                 return size;
             }
         }
@@ -361,7 +361,7 @@ public class VideoRecorder {
     }
 
     private String getVideoFilePath() {
-        final File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES);
+        final File dir = Environment.getExternalStoragePublicDirectory("Crashmate");
         return (dir == null ? "" : (dir.getAbsolutePath() + "/"))
                 + System.currentTimeMillis() + ".mp4";
     }

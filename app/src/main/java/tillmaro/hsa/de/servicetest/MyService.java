@@ -39,7 +39,7 @@ public class MyService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Notification notification = showOldNotification("Crashmate", "Press Start to start recording");
+        showOldNotification("Crashmate", "Press Start to start recording");
 
         switch (intent.getAction()){
             case Constants.ACTION.START_SERVICE :
@@ -105,17 +105,21 @@ public class MyService extends Service {
     }
 
     private void start_recording(){
-        //TODO: Funktion für Aufnahme der OBD-Daten einfügen und in eigenem Thread laufen lassen
+        //Create Folder Crashmate
+        File crashmateFolder = Environment.getExternalStoragePublicDirectory("Crashmate");
+        if(!crashmateFolder.exists()){
+            crashmateFolder.mkdir();
+        }
 
         thread = new HandlerThread("cutter") {
             public void run() {
                 Looper.prepare();
-                recorder.startRecordingVideo(getVideoFilePath(Integer.toString(loop_count % 3)));
+                recorder.startRecordingVideo(getVideoFilePath(Integer.toString(loop_count%2)));
                 while(!Thread.currentThread().isInterrupted()){
                     try {
                         sleep(5000);
-                        recorder.makeCut(getVideoFilePath(Integer.toString(loop_count % 3)));
                         loop_count += 1;
+                        recorder.makeCut(getVideoFilePath(Integer.toString(loop_count%2)));
                     } catch (InterruptedException e) {
                         if (recorder.isRecordingVideo())
                             recorder.stopRecordingVideo();
@@ -134,30 +138,28 @@ public class MyService extends Service {
         //TODO: Aufnahme OBD stoppen
         thread.interrupt();
 
-        final File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES);
+        final File dir = Environment.getExternalStoragePublicDirectory("Crashmate");
         String mpath = dir.getAbsolutePath() + "/";
 
         Log.d(TAG, "Loopcount: " + loop_count);
 
-        switch ((loop_count - 1)%3){
-            case 0:
-                if(loop_count == 0)
-                    break;
-                concatenateWM(mpath + "1.mp4", mpath + "0.mp4", mpath + "final.mp4");
-                break;
-            case 1:
-                concatenateWM(mpath + "0.mp4", mpath + "1.mp4", mpath + "final.mp4");
-                break;
-            case 2:
-                concatenateWM(mpath + "1.mp4", mpath + "2.mp4", mpath + "final.mp4");
-                break;
+        if (loop_count == 0){
+            //Datei umbennenen
+            File video = new File(dir, "0.mp4");
+            File newName = new File(dir, "final.mp4");
+            video.renameTo(newName);
+        } else if (loop_count % 2 == 0){
+            //Dateien zusammenschneiden
+            concatenateWM(mpath + "1.mp4", mpath + "0.mp4", mpath + "final.mp4");
+        } else if (loop_count % 2 == 1){
+            concatenateWM(mpath + "0.mp4", mpath + "1.mp4", mpath + "final.mp4");
         }
 
         Toast.makeText(this, "Stopped", Toast.LENGTH_SHORT).show();
     }
 
     private String getVideoFilePath(String number) {
-        final File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES);
+        final File dir = Environment.getExternalStoragePublicDirectory("Crashmate");
         return (dir == null ? "" : (dir.getAbsolutePath() + "/"))
                 + number + ".mp4";
     }
