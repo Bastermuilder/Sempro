@@ -194,10 +194,10 @@ public class MyService extends Service {
             ffmpeg.execute(new String[] {
                     "-f",
                     "concat",
-                    "-safe",
+                    "-safe", // safe 0 for correct path
                     "0",
                     "-y",
-                    "-i",
+                    "-i", //input parameters
                     list,
                     "-c",
                     "copy",
