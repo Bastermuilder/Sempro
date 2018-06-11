@@ -125,7 +125,6 @@ public class VideoRecorder {
         @Override
         public void onOpened(@NonNull CameraDevice cameraDevice) {
             mCameraDevice = cameraDevice;
-            //startPreview();
             mCameraOpenCloseLock.release();
 
             callBackValue = 0;

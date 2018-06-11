@@ -1,7 +1,6 @@
 package tillmaro.hsa.de.servicetest;
 
 import android.Manifest;
-import android.app.Activity;
 import android.app.Service;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -11,6 +10,8 @@ import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CameraMetadata;
+import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.MediaRecorder;
 import android.opengl.GLES20;
@@ -23,6 +24,7 @@ import android.util.Log;
 import android.util.Size;
 import android.view.Display;
 import android.view.Surface;
+import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.WindowManager;
 import android.widget.Toast;
@@ -44,7 +46,7 @@ import tillmaro.hsa.de.servicetest.gles.WindowSurface;
 
 
 
-public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener {
+public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener, SurfaceHolder.Callback {
 
     private static final String TAG = "CircularRecorder";
 
@@ -61,6 +63,12 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
     private int mFrameNum;
 
     private int mCameraPreviewThousandFps;
+    private CameraCaptureSession mPreviewSession;
+    private AutoFitTextureView mTextureView;
+    private Handler mBackgroundHandler;
+    private CaptureRequest.Builder mPreviewBuilder;
+
+    private SurfaceView mSurfaceView;
 
     private File mOutputFile;
     private CircularEncoder mCircEncoder;
@@ -91,6 +99,10 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
         mTextureId = mFullFrameBlit.createTextureObject();
         mCameraTexture = new SurfaceTexture(mTextureId);
         mCameraTexture.setOnFrameAvailableListener(this);
+
+        mSurfaceView = new SurfaceView(service);
+        SurfaceHolder mSurfaceHolder = mSurfaceView.getHolder();
+        mSurfaceHolder.addCallback(this);
     }
 
     private CameraDevice.StateCallback mStateCallback = new CameraDevice.StateCallback() {
@@ -98,7 +110,7 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
         @Override
         public void onOpened(@NonNull CameraDevice cameraDevice) {
             mCameraDevice = cameraDevice;
-            //startPreview();
+            startPreview();
             mCameraOpenCloseLock.release();
         }
 
@@ -176,15 +188,46 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
         mSecondsOfVideo = durationUsec / 1000000.0f;
     }
 
+    @Override   // SurfaceHolder.Callback
+    public void surfaceCreated(SurfaceHolder holder) {
+        Log.d(TAG, "surfaceCreated holder=" + holder);
+
+        // Set up everything that requires an EGL context.
+        //
+        // We had to wait until we had a surface because you can't make an EGL context current
+        // without one, and creating a temporary 1x1 pbuffer is a waste of time.
+        //
+        // The display surface that we use for the SurfaceView, and the encoder surface we
+        // use for video, use the same EGL context.
+        mEglCore = new EglCore(null, EglCore.FLAG_RECORDABLE);
+        mDisplaySurface = new WindowSurface(mEglCore, holder.getSurface(), false);
+        mDisplaySurface.makeCurrent();
+
+        mFullFrameBlit = new FullFrameRect(
+                new Texture2dProgram(Texture2dProgram.ProgramType.TEXTURE_EXT));
+        mTextureId = mFullFrameBlit.createTextureObject();
+        mCameraTexture = new SurfaceTexture(mTextureId);
+        mCameraTexture.setOnFrameAvailableListener(this);
+    }
+
+    @Override   // SurfaceHolder.Callback
+    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+        Log.d(TAG, "surfaceChanged fmt=" + format + " size=" + width + "x" + height +
+                " holder=" + holder);
+    }
+
+    @Override   // SurfaceHolder.Callback
+    public void surfaceDestroyed(SurfaceHolder holder) {
+        Log.d(TAG, "surfaceDestroyed holder=" + holder);
+    }
+
     @Override
     public void onFrameAvailable(SurfaceTexture surfaceTexture) {
-
+        mHandler.sendEmptyMessage(MainHandler.MSG_FRAME_AVAILABLE);
     }
 
     public void startRecord(){
         openCamera(300, 300);
-
-
     }
 
     private void startPreview() {
@@ -209,17 +252,37 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
 
                         @Override
                         public void onConfigureFailed(@NonNull CameraCaptureSession session) {
-                            Activity activity = getActivity();
-                            if (null != activity) {
-                                Toast.makeText(activity, "Failed", Toast.LENGTH_SHORT).show();
-                            }
+                            Log.d(TAG, "Configure CameraCaptureSession failed");
                         }
                     }, mBackgroundHandler);
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
+    }
 
+    private void closePreviewSession() {
+        if (mPreviewSession != null) {
+            mPreviewSession.close();
+            mPreviewSession = null;
+        }
+    }
 
+    private void updatePreview() {
+        if (null == mCameraDevice) {
+            return;
+        }
+        try {
+            setUpCaptureRequestBuilder(mPreviewBuilder);
+            HandlerThread thread = new HandlerThread("CameraPreview");
+            thread.start();
+            mPreviewSession.setRepeatingRequest(mPreviewBuilder.build(), null, mBackgroundHandler);
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void setUpCaptureRequestBuilder(CaptureRequest.Builder builder) {
+        builder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
     }
 
     private void fileSaveComplete(int status) {
@@ -338,10 +401,9 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
         mCameraTexture.getTransformMatrix(mTmpMatrix);
 
         // Fill the SurfaceView with it.
-        /*SurfaceView sv = (SurfaceView) findViewById(R.id.continuousCapture_surfaceView);
-        int viewWidth = sv.getWidth();
-        int viewHeight = sv.getHeight();
-        GLES20.glViewport(0, 0, viewWidth, viewHeight);*/
+        int viewWidth = mSurfaceView.getWidth();
+        int viewHeight = mSurfaceView.getHeight();
+        GLES20.glViewport(0, 0, viewWidth, viewHeight);
         mFullFrameBlit.drawFrame(mTextureId, mTmpMatrix);
         //drawExtra(mFrameNum, viewWidth, viewHeight);
         mDisplaySurface.swapBuffers();
