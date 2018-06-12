@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Service;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.graphics.PixelFormat;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
@@ -23,6 +24,7 @@ import android.support.v4.app.ActivityCompat;
 import android.util.Log;
 import android.util.Size;
 import android.view.Display;
+import android.view.Gravity;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -43,7 +45,7 @@ import tillmaro.hsa.de.servicetest.gles.FullFrameRect;
 import tillmaro.hsa.de.servicetest.gles.Texture2dProgram;
 import tillmaro.hsa.de.servicetest.gles.WindowSurface;
 
-
+import static android.content.Context.WINDOW_SERVICE;
 
 
 public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener, SurfaceHolder.Callback {
@@ -67,6 +69,7 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
     private AutoFitTextureView mTextureView;
     private Handler mBackgroundHandler;
     private CaptureRequest.Builder mPreviewBuilder;
+    private WindowManager windowManager;
 
     private SurfaceView mSurfaceView;
 
@@ -92,15 +95,15 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
 
         this.service = service;
 
-        mEglCore = new EglCore(null, EglCore.FLAG_RECORDABLE);
-
-        mFullFrameBlit = new FullFrameRect(
-                new Texture2dProgram(Texture2dProgram.ProgramType.TEXTURE_EXT));
-        mTextureId = mFullFrameBlit.createTextureObject();
-        mCameraTexture = new SurfaceTexture(mTextureId);
-        mCameraTexture.setOnFrameAvailableListener(this);
+        windowManager = (WindowManager) service.getSystemService(Context.WINDOW_SERVICE);
 
         mSurfaceView = new SurfaceView(service);
+        WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams(1, 1,
+                WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY,
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                PixelFormat.TRANSLUCENT);
+        layoutParams.gravity = Gravity.LEFT | Gravity.TOP;
+        windowManager.addView(mSurfaceView, layoutParams);
         SurfaceHolder mSurfaceHolder = mSurfaceView.getHolder();
         mSurfaceHolder.addCallback(this);
     }
@@ -131,13 +134,13 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
     };
 
     private static class MainHandler extends Handler implements CircularEncoder.Callback {
-        public static final int MSG_FRAME_AVAILABLE = 1;
-        public static final int MSG_FILE_SAVE_COMPLETE = 2;
-        public static final int MSG_BUFFER_STATUS = 3;
+        static final int MSG_FRAME_AVAILABLE = 1;
+        static final int MSG_FILE_SAVE_COMPLETE = 2;
+        static final int MSG_BUFFER_STATUS = 3;
 
         private WeakReference<CircularRecorder> mWeakActivity;
 
-        public MainHandler(CircularRecorder recorder) {
+        MainHandler(CircularRecorder recorder) {
             mWeakActivity = new WeakReference<>(recorder);
         }
 
@@ -226,19 +229,29 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
         mHandler.sendEmptyMessage(MainHandler.MSG_FRAME_AVAILABLE);
     }
 
-    public void startRecord(){
+    public void startRecord(String file_path){
+        mOutputFile = new File(file_path);
         openCamera(300, 300);
+    }
+
+    public void stopRecord(){
+        Log.d(TAG, "capture");
+        if (mFileSaveInProgress) {
+            Log.w(TAG, "HEY: file save is already in progress");
+            return;
+        }
+        closeCamera();
+
+        mFileSaveInProgress = true;
+        mCircEncoder.saveVideo(mOutputFile);
     }
 
     private void startPreview() {
         try {
             closePreviewSession();
-            SurfaceTexture texture = mTextureView.getSurfaceTexture();
-            assert texture != null;
-            texture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
             mPreviewBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
 
-            Surface previewSurface = new Surface(texture);
+            Surface previewSurface = new Surface(mCameraTexture);
             mPreviewBuilder.addTarget(previewSurface);
 
             mCameraDevice.createCaptureSession(Collections.singletonList(previewSurface),
@@ -258,6 +271,14 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
+
+        try {
+            mCircEncoder = new CircularEncoder(VIDEO_WIDTH, VIDEO_HEIGHT, 6000000,
+                    mCameraPreviewThousandFps / 1000, 7, mHandler);
+        } catch (IOException ioe) {
+            throw new RuntimeException(ioe);
+        }
+        mEncoderSurface = new WindowSurface(mEglCore, mCircEncoder.getInputSurface(), true);
     }
 
     private void closePreviewSession() {
@@ -301,6 +322,21 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
         }
         //Toast toast = Toast.makeText(this, str, Toast.LENGTH_SHORT);
         //toast.show();
+    }
+
+    private void closeCamera() {
+        try {
+            mCameraOpenCloseLock.acquire();
+            closePreviewSession();
+            if (null != mCameraDevice) {
+                mCameraDevice.close();
+                mCameraDevice = null;
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Interrupted while trying to lock camera closing.");
+        } finally {
+            mCameraOpenCloseLock.release();
+        }
     }
 
     private void openCamera(int width, int height) {

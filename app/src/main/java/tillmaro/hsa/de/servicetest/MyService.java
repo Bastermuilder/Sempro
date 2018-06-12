@@ -31,6 +31,7 @@ import java.io.Writer;
 public class MyService extends Service {
 
     private VideoRecorder recorder;
+    private CircularRecorder circularRecorder;
     private HandlerThread thread;
     private int loop_count = 0;
 
@@ -45,11 +46,13 @@ public class MyService extends Service {
             case Constants.ACTION.START_SERVICE :
                 break;
             case Constants.ACTION.START_RECORD :
-                start_recording();
+                //start_recording();
+                start_continuous_recording();
                 break;
             case Constants.ACTION.STOP_RECORD :
                 Log.d(TAG, "Got stop Intent");
-                stop_recording();
+                //stop_recording();
+                stop_continuous_recording();
                 break;
             case Constants.ACTION.STOP_SERVICE :
                 stopForeground(true);
@@ -63,6 +66,7 @@ public class MyService extends Service {
     @Override
     public void onCreate(){
         recorder = new VideoRecorder(this);
+        circularRecorder = new CircularRecorder(this);
     }
 
     @Override
@@ -105,11 +109,7 @@ public class MyService extends Service {
     }
 
     private void start_recording(){
-        //Create Folder Crashmate
-        File crashmateFolder = Environment.getExternalStoragePublicDirectory("Crashmate");
-        if(!crashmateFolder.exists()){
-            crashmateFolder.mkdir();
-        }
+        getCrashmateFilePath();
 
         thread = new HandlerThread("cutter") {
             public void run() {
@@ -132,6 +132,41 @@ public class MyService extends Service {
         thread.start();
 
         Toast.makeText(this, "Started", Toast.LENGTH_SHORT).show();
+    }
+
+    private void start_continuous_recording(){
+
+
+        thread = new HandlerThread("CR") {
+            public void run() {
+                Looper.prepare();
+                circularRecorder.startRecord(getCrashmateFilePath() + "/continued.mp4");
+                Looper.loop();
+                while(!Thread.currentThread().isInterrupted()){
+                    try {
+                        sleep(100);
+                    } catch (InterruptedException e) {
+                        circularRecorder.stopRecord();
+                        Log.d(TAG, "Stopping thread");
+                        thread.quit();
+                    }
+                    Looper.loop();
+                }
+            }
+        };
+        thread.start();
+    }
+
+    private String getCrashmateFilePath(){
+        File crashmateFolder = Environment.getExternalStoragePublicDirectory("Crashmate");
+        if(!crashmateFolder.exists()){
+            crashmateFolder.mkdir();
+        }
+        return crashmateFolder.getAbsolutePath();
+    }
+
+    private void stop_continuous_recording(){
+        thread.interrupt();
     }
 
     private void stop_recording() {
