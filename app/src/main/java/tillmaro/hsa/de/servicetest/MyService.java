@@ -141,16 +141,16 @@ public class MyService extends Service {
             public void run() {
                 Looper.prepare();
                 circularRecorder.startRecord(getCrashmateFilePath() + "/continued.mp4");
-                Looper.loop();
+                //Looper.loop();
                 while(!Thread.currentThread().isInterrupted()){
                     try {
                         sleep(100);
                     } catch (InterruptedException e) {
-                        circularRecorder.stopRecord();
                         Log.d(TAG, "Stopping thread");
+                        circularRecorder.stopRecord();
                         thread.quit();
                     }
-                    Looper.loop();
+                    //Looper.loop();
                 }
             }
         };

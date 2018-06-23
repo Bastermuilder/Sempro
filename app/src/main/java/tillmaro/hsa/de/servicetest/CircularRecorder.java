@@ -14,7 +14,6 @@ import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
-import android.media.MediaRecorder;
 import android.opengl.GLES20;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -23,7 +22,6 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.util.Log;
 import android.util.Size;
-import android.view.Display;
 import android.view.Gravity;
 import android.view.Surface;
 import android.view.SurfaceHolder;
@@ -34,9 +32,7 @@ import android.widget.Toast;
 import java.io.File;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
@@ -45,16 +41,17 @@ import tillmaro.hsa.de.servicetest.gles.FullFrameRect;
 import tillmaro.hsa.de.servicetest.gles.Texture2dProgram;
 import tillmaro.hsa.de.servicetest.gles.WindowSurface;
 
-import static android.content.Context.WINDOW_SERVICE;
 
 
 public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener, SurfaceHolder.Callback {
 
     private static final String TAG = "CircularRecorder";
 
-    private static final int VIDEO_WIDTH = 1280;  // dimensions for 720p video
-    private static final int VIDEO_HEIGHT = 720;
+    private static final int VIDEO_WIDTH = 1080;  // dimensions for 720p video 720 1280
+    private static final int VIDEO_HEIGHT = 1920;
     private static final int DESIRED_PREVIEW_FPS = 15;
+
+    private int desired_video_length = 15;
 
     private EglCore mEglCore;
     private WindowSurface mDisplaySurface;
@@ -88,7 +85,6 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
     private CameraDevice mCameraDevice;
     private Integer mSensorOrientation;
     private Size mVideoSize;
-    private Size mPreviewSize;
 
     public CircularRecorder(Service service){
         mHandler = new MainHandler(this);
@@ -102,7 +98,7 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
                 WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY,
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
                 PixelFormat.TRANSLUCENT);
-        layoutParams.gravity = Gravity.LEFT | Gravity.TOP;
+        layoutParams.gravity = Gravity.START | Gravity.TOP;
         windowManager.addView(mSurfaceView, layoutParams);
         SurfaceHolder mSurfaceHolder = mSurfaceView.getHolder();
         mSurfaceHolder.addCallback(this);
@@ -231,7 +227,7 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
 
     public void startRecord(String file_path){
         mOutputFile = new File(file_path);
-        openCamera(300, 300);
+        openCamera(VIDEO_WIDTH, VIDEO_HEIGHT);
     }
 
     public void stopRecord(){
@@ -273,8 +269,8 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
         }
 
         try {
-            mCircEncoder = new CircularEncoder(VIDEO_WIDTH, VIDEO_HEIGHT, 6000000,
-                    mCameraPreviewThousandFps / 1000, 7, mHandler);
+            mCircEncoder = new CircularEncoder(VIDEO_WIDTH, VIDEO_HEIGHT, 10000000,
+                    DESIRED_PREVIEW_FPS, desired_video_length, mHandler);
         } catch (IOException ioe) {
             throw new RuntimeException(ioe);
         }
@@ -309,19 +305,11 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
     private void fileSaveComplete(int status) {
         Log.d(TAG, "fileSaveComplete " + status);
 
-        String str;
         if (!mFileSaveInProgress) {
             throw new RuntimeException("WEIRD: got fileSaveComplete when not in progress");
         }
         mFileSaveInProgress = false;
 
-        if (status == 0) {
-            str = "Recording succeeded";
-        } else {
-            str = "Recording failed";
-        }
-        //Toast toast = Toast.makeText(this, str, Toast.LENGTH_SHORT);
-        //toast.show();
     }
 
     private void closeCamera() {
@@ -356,9 +344,7 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
             if (map == null) {
                 throw new RuntimeException("Cannot get available preview/video sizes");
             }
-            mVideoSize = chooseVideoSize(map.getOutputSizes(MediaRecorder.class));
-            mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
-                    width, height, mVideoSize);
+            //mVideoSize = chooseVideoSize(map.getOutputSizes(MediaRecorder.class));
 
             //int orientation = service.getResources().getConfiguration().orientation;
             if (ActivityCompat.checkSelfPermission(service, Manifest.permission.CAMERA)
@@ -403,27 +389,6 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
         return choices[choices.length - 1];
     }
 
-    private static Size chooseOptimalSize(Size[] choices, int width, int height, Size aspectRatio) {
-        // Collect the supported resolutions that are at least as big as the preview Surface
-        List<Size> bigEnough = new ArrayList<>();
-        int w = aspectRatio.getWidth();
-        int h = aspectRatio.getHeight();
-        for (Size option : choices) {
-            if (option.getHeight() == option.getWidth() * h / w &&
-                    option.getWidth() >= width && option.getHeight() >= height) {
-                bigEnough.add(option);
-            }
-        }
-
-        // Pick the smallest of those, assuming we found any
-        if (bigEnough.size() > 0) {
-            return Collections.min(bigEnough, new VideoRecorder.CompareSizesByArea());
-        } else {
-            Log.e(TAG, "Couldn't find any suitable preview size");
-            return choices[0];
-        }
-    }
-
     private void drawFrame() {
         //Log.d(TAG, "drawFrame");
         if (mEglCore == null) {
@@ -432,24 +397,15 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
         }
 
         // Latch the next frame from the camera.
-        mDisplaySurface.makeCurrent();
         mCameraTexture.updateTexImage();
         mCameraTexture.getTransformMatrix(mTmpMatrix);
 
-        // Fill the SurfaceView with it.
-        int viewWidth = mSurfaceView.getWidth();
-        int viewHeight = mSurfaceView.getHeight();
-        GLES20.glViewport(0, 0, viewWidth, viewHeight);
-        mFullFrameBlit.drawFrame(mTextureId, mTmpMatrix);
-        //drawExtra(mFrameNum, viewWidth, viewHeight);
-        mDisplaySurface.swapBuffers();
 
         // Send it to the video encoder.
         if (!mFileSaveInProgress) {
             mEncoderSurface.makeCurrent();
             GLES20.glViewport(0, 0, VIDEO_WIDTH, VIDEO_HEIGHT);
             mFullFrameBlit.drawFrame(mTextureId, mTmpMatrix);
-            //drawExtra(mFrameNum, VIDEO_WIDTH, VIDEO_HEIGHT);
             mCircEncoder.frameAvailableSoon();
             mEncoderSurface.setPresentationTime(mCameraTexture.getTimestamp());
             mEncoderSurface.swapBuffers();
