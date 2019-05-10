@@ -3,6 +3,7 @@ package tillmaro.hsa.de.servicetest;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.nfc.Tag;
 import android.os.Environment;
@@ -31,9 +32,11 @@ import java.io.Writer;
 public class MyService extends Service {
 
     private VideoRecorder recorder;
-    private CircularRecorder circularRecorder;
+//    private CircularRecorder circularRecorder;
+    private CircularRecorderTwo circularRecorderTwo;
     private HandlerThread thread;
     private int loop_count = 0;
+    private Context context;
 
     private static final String TAG = "MyService";
 
@@ -66,7 +69,8 @@ public class MyService extends Service {
     @Override
     public void onCreate(){
         recorder = new VideoRecorder(this);
-        circularRecorder = new CircularRecorder(this);
+        circularRecorderTwo = new CircularRecorderTwo(this, this);
+//        circularRecorder = new CircularRecorder(this, this)
     }
 
     @Override
@@ -135,19 +139,18 @@ public class MyService extends Service {
     }
 
     private void start_continuous_recording(){
-
-
         thread = new HandlerThread("CR") {
             public void run() {
                 Looper.prepare();
-                circularRecorder.startRecord(getCrashmateFilePath() + "/continued.mp4");
+                circularRecorderTwo.startRecord(getCrashmateFilePath() + "/continued.mp4");
                 //Looper.loop();
                 while(!Thread.currentThread().isInterrupted()){
                     try {
                         sleep(100);
                     } catch (InterruptedException e) {
                         Log.d(TAG, "Stopping thread");
-                        circularRecorder.stopRecord();
+                        circularRecorderTwo.clickCapture(null);
+                        circularRecorderTwo.onPause();
                         thread.quit();
                     }
                     //Looper.loop();

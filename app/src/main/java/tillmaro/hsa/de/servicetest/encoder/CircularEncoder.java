@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package tillmaro.hsa.de.servicetest;
+package tillmaro.hsa.de.servicetest.encoder;
 
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
@@ -49,7 +49,7 @@ import java.nio.ByteBuffer;
  * and then go back to what we were doing.
  */
 public class CircularEncoder {
-    private static final String TAG = "Circular Encoder";
+    private static final String TAG = "CircularEncoder";
     private static final boolean VERBOSE = false;
 
     private static final String MIME_TYPE = "video/avc";    // H.264 Advanced Video Coding
@@ -89,7 +89,7 @@ public class CircularEncoder {
      * @param desiredSpanSec How many seconds of video we want to have in our buffer at any time.
      */
     public CircularEncoder(int width, int height, int bitRate, int frameRate, int desiredSpanSec,
-            Callback cb) throws IOException {
+                           Callback cb) throws IOException {
         // The goal is to size the buffer so that we can accumulate N seconds worth of video,
         // where N is passed in as "desiredSpanSec".  If the codec generates data at roughly
         // the requested bit rate, we can compute it as time * bitRate / bitsPerByte.
@@ -225,7 +225,7 @@ public class CircularEncoder {
         private volatile boolean mReady = false;
 
         public EncoderThread(MediaCodec mediaCodec, CircularEncoderBuffer encBuffer,
-                CircularEncoder.Callback callback) {
+                             CircularEncoder.Callback callback) {
             mEncoder = mediaCodec;
             mEncBuffer = encBuffer;
             mCallback = callback;

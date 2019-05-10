@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package tillmaro.hsa.de.servicetest;
+package tillmaro.hsa.de.servicetest.encoder;
 
 import android.media.MediaCodec;
 import android.util.Log;

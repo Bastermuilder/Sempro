@@ -1,6 +1,7 @@
 package tillmaro.hsa.de.servicetest;
 
 import android.Manifest;
+import android.app.Activity;
 import android.app.Service;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -36,6 +37,7 @@ import java.util.Collections;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
+import tillmaro.hsa.de.servicetest.encoder.CircularEncoder;
 import tillmaro.hsa.de.servicetest.gles.EglCore;
 import tillmaro.hsa.de.servicetest.gles.FullFrameRect;
 import tillmaro.hsa.de.servicetest.gles.Texture2dProgram;
@@ -86,7 +88,7 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
     private Integer mSensorOrientation;
     private Size mVideoSize;
 
-    public CircularRecorder(Service service){
+    public CircularRecorder(Service service, Activity mainActivity){
         mHandler = new MainHandler(this);
 
         this.service = service;
@@ -390,7 +392,7 @@ public class CircularRecorder implements SurfaceTexture.OnFrameAvailableListener
     }
 
     private void drawFrame() {
-        //Log.d(TAG, "drawFrame");
+        Log.d(TAG, "drawFrame");
         if (mEglCore == null) {
             Log.d(TAG, "Skipping drawFrame after shutdown");
             return;
