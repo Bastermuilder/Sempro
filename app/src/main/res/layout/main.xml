@@ -25,23 +25,4 @@
         tools:layout_editor_absoluteX="0dp"
         tools:layout_editor_absoluteY="-2dp" />
 
-    <tillmaro.hsa.de.servicetest.AspectFrameLayout
-        android:id="@+id/continuousCapture_afl"
-        android:layout_width="393dp"
-        android:layout_height="644dp"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentRight="true"
-        android:layout_alignParentBottom="true"
-        android:layout_centerInParent="true"
-        tools:layout_editor_absoluteX="18dp"
-        tools:layout_editor_absoluteY="87dp">
-
-        <SurfaceView
-            android:id="@+id/surfaceView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_gravity="center" />
-
-    </tillmaro.hsa.de.servicetest.AspectFrameLayout>
-
 </android.support.constraint.ConstraintLayout>
